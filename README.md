@@ -1,4 +1,4 @@
-# TCFModManager Server Map — the SPT server mod
+# TCFModManager Server Map - the SPT server mod
 
 The server half of TCFModManager's Server map feature. It publishes what a server expects its
 players to be running, so the app can tell someone their install is behind **before** they launch,
