@@ -1,0 +1,93 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The SPT 4.0.13 stub.
+
+    Sibling of ServerMap.Server.Stub, which is the SPT 4.1.x one. They are separate projects because
+    SPT's mod surface changed in five incompatible ways between the two lines and none of them can
+    be bridged from one source file:
+
+                     4.0.13                              4.1.x
+      runtime        net9.0                              net10.0
+      metadata       AbstractModMetadata (abstract       IModMetadata (interface),
+                     record), IsBundleMod                HasPrepatcher
+      IOnLoad        Task OnLoad()                       Task OnLoadAsync(CancellationToken)
+      CanHandle      (MongoId, HttpContext)              (HttpContext)
+      Handle         Handle(MongoId, HttpContext)        HandleAsync(MongoId, HttpContext, CT)
+      ISptLogger<T>  ...Core.Models.Utils                ...Common.Models.Logging
+
+    Both stubs compile to the same assembly name and the same mod folder layout, because only one is
+    ever installed: the one matching the server it is going into. Everything a user would call "the
+    feature" is in the payload, which is ONE net9.0 build shared by both - it touches no SPT type and
+    no ASP.NET type, so there is nothing in it for a version bump to break. That is the whole point
+    of the split, and it is why supporting a third SPT line means writing three small files here and
+    nothing else anywhere.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>TCFModManager.ServerMap.Stub</RootNamespace>
+    <AssemblyName>TCFMM.ServerMap.Stub</AssemblyName>
+    <Version>0.1.0</Version>
+    <!-- Matches the layout SPT's mod loader expects: one folder per mod. -->
+    <OutputPath>bin\$(Configuration)\TCFMM.ServerMap\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+  </PropertyGroup>
+
+  <!--
+    Where a 4.0.13 server's own assemblies live, e.g. D:\Single Player Tarkov Server\SPT.
+    Its own property, separate from SptServerDir: building both stubs on one machine means having
+    both installs on hand, and pointing one variable at both in turn is exactly how a 4.1 assembly
+    ends up referenced by the 4.0 build without anyone noticing until runtime.
+
+    Set it in build/Directory.Build.local.props (gitignored) or as SPT_SERVER_40_DIR.
+  -->
+  <PropertyGroup>
+    <Spt40ServerDir Condition="'$(Spt40ServerDir)' == ''">$(SPT_SERVER_40_DIR)</Spt40ServerDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <!--
+    The contract, and the loader that uses it. Copied into the mod folder (Private is left on) so
+    SPT loads it as this stub's dependency - which is also how the payload resolves the SAME
+    instance rather than a second copy of the same types.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\ServerMap.Shared\ServerMap.Shared.csproj" />
+  </ItemGroup>
+
+  <!--
+    Referenced out of the SPT install rather than from NuGet, and Private=false so none of them are
+    copied into the mod folder: the server already has them, and shipping duplicates risks a
+    type-identity conflict against the host's own copies.
+  -->
+  <ItemGroup>
+    <Reference Include="SPTarkov.Server.Core">
+      <HintPath>$(Spt40ServerDir)\SPTarkov.Server.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="SPTarkov.Common">
+      <HintPath>$(Spt40ServerDir)\SPTarkov.Common.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="SPTarkov.DI">
+      <HintPath>$(Spt40ServerDir)\SPTarkov.DI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="SemanticVersioning">
+      <HintPath>$(Spt40ServerDir)\SemanticVersioning.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="CheckSpt40ServerDir" BeforeTargets="BeforeBuild">
+    <Error Condition="'$(Spt40ServerDir)' == ''"
+           Text="Spt40ServerDir is not set. Point it at the SPT 4.0.13 folder holding SPT.Server.exe (e.g. D:\Single Player Tarkov Server\SPT) in build/Directory.Build.local.props or the SPT_SERVER_40_DIR environment variable." />
+  </Target>
+
+</Project>

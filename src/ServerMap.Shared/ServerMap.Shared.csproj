@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Everything both halves of the mod agree on, and NOTHING either SPT version disagrees about.
+
+    net9.0 and pure BCL on purpose: no SPT reference, no FrameworkReference, no ASP.NET. That is what
+    lets one build of this - and one build of the payload - load under both SPT 4.0.13 (a .NET 9
+    host) and SPT 4.1.x (a .NET 10 host). A higher target here would strand 4.0.13; a framework
+    reference would put an assembly-binding roll-forward in the middle of the one boundary that has
+    already broken five times.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>TCFModManager.ServerMap.Contract</RootNamespace>
+    <AssemblyName>TCFMM.ServerMap.Shared</AssemblyName>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The payload. Everything the feature actually does lives here, in
+    <SPT root>\TCFModManager\ServerMap\payload\ - outside the folders SPT and BepInEx insist on, so
+    the whole feature is one deletable folder.
+
+    net9.0, and no framework reference: it touches no SPT type and no ASP.NET type, because the
+    contract hands it a flattened PayloadRequest. That is what lets one build of this serve both SPT
+    4.0.13 and 4.1.x.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>TCFModManager.ServerMap</RootNamespace>
+    <AssemblyName>TCFMM.ServerMap.Payload</AssemblyName>
+    <Version>0.1.0</Version>
+    <OutputPath>bin\$(Configuration)\payload\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+  </PropertyGroup>
+
+  <!--
+    The contract only - never the stub, and never anything SPT-shaped. At runtime the stub has
+    already loaded this assembly as its own dependency, so this resolves to that same instance
+    rather than a second copy. Private=false keeps it out of the payload folder, where a duplicate
+    would break type identity outright.
+
+    This is also what makes ONE payload build work on both SPT versions: net9.0 against a net9.0
+    contract, loadable by a .NET 9 host (4.0.13) and a .NET 10 one (4.1.x) alike.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\ServerMap.Shared\ServerMap.Shared.csproj">
+      <Private>false</Private>
+    </ProjectReference>
+  </ItemGroup>
+
+</Project>

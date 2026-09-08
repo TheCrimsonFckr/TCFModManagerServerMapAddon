@@ -1,0 +1,73 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The stub. This is the only thing that sits where SPT's mod loader insists on looking, and it
+    holds no feature logic at all - it finds the payload under <SPT root>\TCFModManager\ServerMap\
+    and forwards to it. Delete that folder and this keeps loading, logs one line and does nothing.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>TCFModManager.ServerMap.Stub</RootNamespace>
+    <AssemblyName>TCFMM.ServerMap.Stub</AssemblyName>
+    <Version>0.1.0</Version>
+    <!-- Matches the layout SPT's mod loader expects: one folder per mod. -->
+    <OutputPath>bin\$(Configuration)\TCFMM.ServerMap\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+  </PropertyGroup>
+
+  <!--
+    Where the SPT server's own assemblies live, e.g. G:\Single Player Tarkov 4.1\SPT_Runtime.
+    Set it in build/Directory.Build.local.props (gitignored) or as SPT_SERVER_DIR, the same way
+    TCFModSync.Client resolved its BepInEx references. Machine layout, never committed.
+  -->
+  <PropertyGroup>
+    <SptServerDir Condition="'$(SptServerDir)' == ''">$(SPT_SERVER_DIR)</SptServerDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <!--
+    The contract, and the loader that uses it. Copied into the mod folder (Private is left on) so
+    SPT loads it as this stub's dependency - which is also how the payload resolves the SAME
+    instance, exactly as it used to resolve the stub itself.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\ServerMap.Shared\ServerMap.Shared.csproj" />
+  </ItemGroup>
+
+  <!--
+    Referenced out of the SPT install rather than from NuGet: SPT 4.1.5 is not published there
+    (newest package is 4.1.2), and these are the exact assemblies the server will load this mod
+    beside. Private=false so none of them are copied into the mod folder - the server already has
+    them, and shipping duplicates risks type-identity conflicts.
+  -->
+  <ItemGroup>
+    <Reference Include="SPTarkov.Server.Core">
+      <HintPath>$(SptServerDir)\SPTarkov.Server.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="SPTarkov.Common">
+      <HintPath>$(SptServerDir)\SPTarkov.Common.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="SPTarkov.DI">
+      <HintPath>$(SptServerDir)\SPTarkov.DI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="SemanticVersioning">
+      <HintPath>$(SptServerDir)\SemanticVersioning.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="CheckSptServerDir" BeforeTargets="BeforeBuild">
+    <Error Condition="'$(SptServerDir)' == ''"
+           Text="SptServerDir is not set. Point it at the folder holding SPT.Server.exe (e.g. G:\Single Player Tarkov 4.1\SPT_Runtime) in build/Directory.Build.local.props or the SPT_SERVER_DIR environment variable." />
+  </Target>
+
+</Project>

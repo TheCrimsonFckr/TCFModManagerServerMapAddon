@@ -1,0 +1,48 @@
+<Project>
+
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <Company>TheCrimsonFuckr</Company>
+    <Product>TCFModManager Server Map</Product>
+
+    <!--
+      NO <Version> here on purpose. Each project sets its own, because they do not move together:
+      the contract and the payload version independently of the two stubs, and a single repo-wide
+      Version set here would be silently overridden by every one of them - which is worse than not
+      having it, because it looks authoritative and is not.
+
+      The version a server operator sees is the payload's, reported by /tcfservermap/hello.
+    -->
+
+    <!--
+      Stack traces embed the absolute path of every source file as it existed on the build machine.
+      PathMap rewrites those to repo-relative paths at compile time, so a trace shipped in a server
+      log reads "./src/ServerMap.Server/ServerMapPayload.cs:43" rather than exposing the build
+      machine's folder layout and account name.
+
+      This file lives in build/, one level below the repo root, so the mapped prefix has to be the
+      *parent* of this file's own directory - otherwise the prefix never matches and this silently
+      does nothing.
+    -->
+    <PathMap>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\'))=./</PathMap>
+
+    <!-- Same source produces the same binary regardless of machine or directory. -->
+    <Deterministic>true</Deterministic>
+
+    <!--
+      NuGet.config lives next to this file in build/, outside the directory walk-up NuGet normally
+      uses to auto-discover it. This property is the supported way to redirect that discovery.
+    -->
+    <RestoreConfigFile>$(MSBuildThisFileDirectory)NuGet.config</RestoreConfigFile>
+  </PropertyGroup>
+
+  <!--
+    Machine-specific SPT install paths, if present. Gitignored - see
+    Directory.Build.local.props.example for what goes in it.
+  -->
+  <Import Project="$(MSBuildThisFileDirectory)Directory.Build.local.props"
+          Condition="Exists('$(MSBuildThisFileDirectory)Directory.Build.local.props')" />
+
+</Project>

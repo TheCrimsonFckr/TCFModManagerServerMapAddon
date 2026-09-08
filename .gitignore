@@ -1,0 +1,32 @@
+# Build output
+bin/
+obj/
+dist/
+publish/
+
+# IDE / editor
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+*.rsuser
+*.sln.docstates
+*.sln.DotSettings.user
+
+# PowerShell tooling stays local
+*.ps1
+
+# Machine-specific build config only - points at local SPT installs
+build/Directory.Build.local.props
+
+# Holding area for dead files
+_to_delete/
+
+# Decompiler scratch
+*_decompiled.cs
+
+# OS cruft
+Thumbs.db
+desktop.ini
+.DS_Store
