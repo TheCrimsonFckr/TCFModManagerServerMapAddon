@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Tests for everything in this repo that runs without an SPT install: the payload, the contract's
+    loader, and the stubs' header handling (StubHeaders, linked in from the one copy both stubs
+    compile). The stubs themselves reference SPT's assemblies and are not built here.
+
+    Run from the repo root: dotnet test tests\ServerMap.Server.Tests
+  -->
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>TCFModManager.ServerMap.Tests</RootNamespace>
+    <AssemblyName>ServerMap.Server.Tests</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <!--
+    Shared is named on its own because the payload references it with Private=false (at runtime the
+    stub has already loaded it), which would otherwise leave it out of this project's output.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ServerMap.Shared\ServerMap.Shared.csproj" />
+    <ProjectReference Include="..\..\src\ServerMap.Server\ServerMap.Server.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\ServerMap.Server.Stub.Common\*.cs" LinkBase="StubCommon" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

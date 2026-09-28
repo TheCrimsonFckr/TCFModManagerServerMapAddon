@@ -57,6 +57,11 @@
     SPT loads it as this stub's dependency - which is also how the payload resolves the SAME
     instance rather than a second copy of the same types.
   -->
+  <!-- Shared with the other stub and the tests: see StubHeaders. -->
+  <ItemGroup>
+    <Compile Include="..\ServerMap.Server.Stub.Common\*.cs" LinkBase="Common" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\ServerMap.Shared\ServerMap.Shared.csproj" />
   </ItemGroup>

@@ -1,0 +1,50 @@
+{
+  "SchemaVersion": 4,
+  "App": "TCFModManager",
+  "Author": "TheCrimsonFckr",
+  "ExportedAt": "2026-09-28T12:00:00\u002B00:00",
+  "List": {
+    "Id": "6f1c1f0e-1d2b-4c1e-9d55-0a4b2f0c7e11",
+    "Name": "Zero to Hero",
+    "Description": null,
+    "Revision": 7,
+    "Origin": "Local",
+    "Policy": "Exclusive",
+    "DerivedFrom": null,
+    "SptVersion": "4.1.5",
+    "IsSnapshot": false,
+    "CreatedAt": "2026-09-28T12:00:00\u002B00:00",
+    "UpdatedAt": "2026-09-28T12:30:00\u002B00:00",
+    "Entries": [
+      {
+        "Name": "SAIN",
+        "ModId": 1,
+        "IsAddon": false,
+        "VersionId": 10,
+        "Version": "3.1.2",
+        "Guid": null,
+        "Folders": [],
+        "Scope": "Client, Headless"
+      },
+      {
+        "Name": "fika-server",
+        "ModId": 3,
+        "IsAddon": false,
+        "VersionId": 30,
+        "Version": "1.0.0",
+        "Guid": null,
+        "Folders": [],
+        "Scope": "Server"
+      },
+      {
+        "Name": "Realism",
+        "ModId": 5,
+        "IsAddon": false,
+        "VersionId": 50,
+        "Version": "1.6.0",
+        "Guid": null,
+        "Folders": []
+      }
+    ]
+  }
+}

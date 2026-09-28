@@ -40,6 +40,10 @@ public static class ServerMapKey
     private static readonly object Gate = new();
 
     private static string? _key;
+
+    // The key file _key was read from or written to. A key belongs to one config folder, never to
+    // whichever folder asks next.
+    private static string? _keyPath;
     private static string? _cachedPath;
     private static long _cachedLength;
     private static DateTime _cachedWrittenUtc;
@@ -96,6 +100,7 @@ public static class ServerMapKey
                 _cachedPath = path;
                 _cachedLength = info.Length;
                 _cachedWrittenUtc = info.LastWriteTimeUtc;
+                _keyPath = path;
                 return _key = existing;
             }
 
@@ -104,7 +109,7 @@ public static class ServerMapKey
             // minting another: a file that vanished under a running server is a problem to notice,
             // not a reason to invalidate every key already handed out.
             //
-            if (_key is not null) return _key;
+            if (_key is not null && _keyPath == path) return _key;
 
             return Write(configDirectory, Generate());
         }
@@ -148,6 +153,7 @@ public static class ServerMapKey
             _cachedPath = null;
         }
 
+        _keyPath = path;
         return _key = key;
     }
 

@@ -39,13 +39,24 @@ public sealed class ServerMapPayload : IServerMapPayload
 
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
 
-    private readonly string _configDirectory =
-        PublishedModList.ConfigDirectory(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? ".");
+    private readonly string _configDirectory;
+
+    private readonly Func<DateTimeOffset> _now;
 
     private readonly ClientRegistry _clients;
 
+    // What the stub's loader calls: the config folder is found from where this assembly sits.
     public ServerMapPayload()
+        : this(PublishedModList.ConfigDirectory(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? "."))
     {
+    }
+
+    // The tests' way in: a config folder of their own, and a clock they can move.
+    internal ServerMapPayload(string configDirectory, Func<DateTimeOffset>? now = null)
+    {
+        _configDirectory = configDirectory;
+        _now = now ?? (() => DateTimeOffset.UtcNow);
+
         //
         // Generated when the server starts, not when someone first fails to authenticate.
         //
@@ -56,7 +67,7 @@ public sealed class ServerMapPayload : IServerMapPayload
         //
         ServerMapKey.Current(_configDirectory);
 
-        _clients = new ClientRegistry(_configDirectory);
+        _clients = new ClientRegistry(_configDirectory, _now);
 
         AppDomain.CurrentDomain.ProcessExit += (_, _) => _clients.Flush();
     }
@@ -262,7 +273,7 @@ public sealed class ServerMapPayload : IServerMapPayload
     private PayloadResponse Clients(PayloadRequest request)
     {
         var you = Header(request, ClientHeaderName);
-        var now = DateTimeOffset.UtcNow;
+        var now = _now();
 
         var clients = _clients.Snapshot().Select(c => new
         {

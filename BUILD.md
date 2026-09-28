@@ -37,7 +37,25 @@ dotnet build src/ServerMap.Server.Stub.Spt40/ServerMap.Server.Stub.Spt40.csproj 
   -p:Spt40ServerDir="D:\Single Player Tarkov Server\SPT"
 ```
 
-Building the solution builds all four, which needs both SPT installs and both SDKs present.
+Building the solution builds all four projects and the tests, which needs both SPT installs and both SDKs present.
+
+## Tests
+
+```
+dotnet test tests/ServerMap.Server.Tests
+```
+
+Needs the .NET 9 SDK and nothing else - no SPT install. It covers the payload (every route, the
+key, LAN-only, the map's registry, the published list), the contract's payload loader, and the
+stubs' header handling: `src/ServerMap.Server.Stub.Common/StubHeaders.cs` is compiled into both
+stubs and into the tests, so the one copy that decides the caller's address is tested without SPT's
+assemblies. The rest of each stub is SPT wiring and is only proven on a real server.
+
+`Fixtures/` holds a mod list and a report written by TCFModManager's own code, so the formats the
+two repos share are tested against the app's real output rather than JSON typed out by hand.
+Regenerate them from `TCFModManager.Core` whenever either format changes.
+
+`build/package-release.ps1` runs these first and stops on a failure; `-SkipTests` skips them.
 
 ## What comes out
 

@@ -31,6 +31,10 @@
     contract, loadable by a .NET 9 host (4.0.13) and a .NET 10 one (4.1.x) alike.
   -->
   <ItemGroup>
+    <InternalsVisibleTo Include="ServerMap.Server.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\ServerMap.Shared\ServerMap.Shared.csproj">
       <Private>false</Private>
     </ProjectReference>

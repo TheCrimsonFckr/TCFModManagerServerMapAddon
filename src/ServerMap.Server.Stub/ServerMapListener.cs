@@ -48,17 +48,9 @@ public class ServerMapListener(ISptLogger<ServerMapListener> logger) : IHttpList
             using var buffer = new MemoryStream();
             await context.Request.Body.CopyToAsync(buffer, cancellationToken).ConfigureAwait(false);
 
-            //
-            // The caller's address goes to the payload in a header only this stub sets - any copy
-            // that arrived with the request is dropped first, so nobody can claim to be on the
-            // server's network. Taken from the socket, never from a forwarded-for header.
-            //
-            var headers = context.Request.Headers
-                .Where(h => !string.Equals(h.Key, PayloadHeaders.RemoteAddress, StringComparison.OrdinalIgnoreCase))
-                .ToDictionary(h => h.Key, h => h.Value.ToString(), StringComparer.OrdinalIgnoreCase);
-
-            if (context.Connection.RemoteIpAddress is { } remote)
-                headers[PayloadHeaders.RemoteAddress] = remote.ToString();
+            var headers = StubHeaders.ForPayload(
+                context.Request.Headers.Select(h => new KeyValuePair<string, string>(h.Key, h.Value.ToString())),
+                context.Connection.RemoteIpAddress);
 
             var request = new PayloadRequest(
                 context.Request.Method,
