@@ -299,7 +299,7 @@ public sealed class ServerMapPayload : IServerMapPayload
 
     //
     // The address comes from the stub, which takes it from the socket and drops any copy a caller
-    // sent. A stub older than 0.3.0 sends none, and then nothing can be checked - so with LAN-only
+    // sent. A stub older than 0.2.0 sends none, and then nothing can be checked - so with LAN-only
     // on, an unknown address is treated as outside: the operator asked for the stricter answer.
     //
     private static bool FromLocalNetwork(PayloadRequest request)

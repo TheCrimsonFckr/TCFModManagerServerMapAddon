@@ -113,6 +113,23 @@ Data\ServerMap\clients.json; a machine not heard from for 30 days is forgotten, 
 that switches reporting off is removed straight away.
 
 
+LAN-ONLY
+--------
+
+Off by default. When on, the server answers nothing from outside its own network - not
+even /hello - and returns 403 with "reason":"lanOnly". Its own network means the machine
+itself, 10.x, 172.16-31.x, 192.168.x, link-local, and 100.64.0.0/10 (Tailscale). The
+address is the one the server's socket saw; a caller cannot claim one.
+
+Turn it on in TCFModManager on the server machine (Options - Server map connection), or
+by hand in Data\ServerMap\servermap.json:
+
+  { "lanOnly": true }
+
+Re-read when the file changes; no restart needed. Needs this version's stub: with an
+older stub the payload cannot see the address, and a LAN-only server refuses everyone.
+
+
 ROUTES
 ------
 
