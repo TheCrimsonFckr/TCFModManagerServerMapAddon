@@ -35,3 +35,15 @@ public interface IServerMapPayload
 
     Task<PayloadResponse> HandleAsync(PayloadRequest request, CancellationToken cancellationToken);
 }
+
+//
+// Headers the stub adds to a request before handing it over. Only the stub may set these: it
+// removes any copy that arrived from outside first, so a caller cannot claim to be somebody else.
+// Constants, so a payload built against them carries the value and needs nothing new from an older
+// stub's copy of this assembly at runtime - an older stub simply never sets them.
+//
+public static class PayloadHeaders
+{
+    // The address the request came from, as the server's socket saw it. Never a forwarded header.
+    public const string RemoteAddress = "X-TCFMM-Remote-Address";
+}

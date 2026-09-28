@@ -70,6 +70,14 @@ public sealed class ServerMapPayload : IServerMapPayload
         var path = route.ToLowerInvariant();
 
         //
+        // LAN-only comes first, before the handshake and before the key: the operator has said this
+        // server answers its own network and nobody else, and that includes telling a stranger
+        // anything about it. The refusal says why, so a player outside it is not left guessing.
+        //
+        if (ServerMapSettings.Current(_configDirectory).LanOnly && !FromLocalNetwork(request))
+            return Task.FromResult(OutsideNetwork());
+
+        //
         // Everything but the handshake is gated, checked here rather than per route so adding a
         // route cannot accidentally add an open one.
         //
@@ -286,6 +294,45 @@ public sealed class ServerMapPayload : IServerMapPayload
 
     private static PayloadResponse Error(int status, string message) =>
         new(status, "application/json", JsonSerializer.Serialize(new { protocol = Protocol, error = message }, Json));
+
+    private static bool _warnedNoAddress;
+
+    //
+    // The address comes from the stub, which takes it from the socket and drops any copy a caller
+    // sent. A stub older than 0.3.0 sends none, and then nothing can be checked - so with LAN-only
+    // on, an unknown address is treated as outside: the operator asked for the stricter answer.
+    //
+    private static bool FromLocalNetwork(PayloadRequest request)
+    {
+        var address = Header(request, PayloadHeaders.RemoteAddress);
+
+        if (address is null)
+        {
+            if (!_warnedNoAddress)
+            {
+                _warnedNoAddress = true;
+                Console.Error.WriteLine(
+                    "[TCFMM ServerMap] LAN-only is on, but the stub in user\\mods does not pass the caller's address " +
+                    "- every request is refused. Install the stub from the same zip as this payload.");
+            }
+
+            return false;
+        }
+
+        return LocalNetwork.IsLocal(address);
+    }
+
+    private static PayloadResponse OutsideNetwork()
+    {
+        var body = new
+        {
+            protocol = Protocol,
+            error = "This server only answers machines on its own network.",
+            reason = "lanOnly",
+        };
+
+        return new PayloadResponse(403, "application/json", JsonSerializer.Serialize(body, Json));
+    }
 
     private bool Authorized(PayloadRequest request) =>
         ServerMapKey.Verify(ServerMapKey.Current(_configDirectory), Header(request, ServerMapKey.HeaderName));
