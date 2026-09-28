@@ -6,7 +6,7 @@ using TCFModManager.ServerMap.Contract;
 namespace TCFModManager.ServerMap;
 
 //
-// Everything this server mod does. Three routes:
+// Everything this server mod does:
 //
 //   GET /tcfservermap/hello - the handshake TCFModManager probes to decide whether it can talk to
 //                             this server. THE ONLY UNAUTHENTICATED ROUTE, on purpose: it is asked
@@ -15,6 +15,11 @@ namespace TCFModManager.ServerMap;
 //                             address" from "right address, no key".
 //   GET /tcfservermap/list  - the mod list this server publishes, served verbatim from the file the
 //                             operator dropped into config\. See PublishedModList. Needs the key.
+//   POST /tcfservermap/report   - a machine running TCFModManager says it is here, what it is,
+//                                 whether the game is running, and (when asked) what it has
+//                                 installed. Sent once a minute. Needs the key.
+//   POST /tcfservermap/withdraw - a machine stops reporting and is taken off the map. Needs the key.
+//   GET /tcfservermap/clients   - the map: every machine that reports here. Needs the key.
 //   POST /tcfservermap/echo - diagnostic. Reports the request body exactly as it arrived. Kept from
 //                             the transport spike because "the body arrived mangled" is the one
 //                             class of bug that is impossible to reason about without it. Needs the
@@ -28,10 +33,16 @@ public sealed class ServerMapPayload : IServerMapPayload
 {
     private const int Protocol = 1;
 
+    public const string ClientHeaderName = "X-ServerMap-Client";
+
+    private const int MaxReportBytes = 1024 * 1024;
+
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
 
     private readonly string _configDirectory =
         PublishedModList.ConfigDirectory(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? ".");
+
+    private readonly ClientRegistry _clients;
 
     public ServerMapPayload()
     {
@@ -44,6 +55,10 @@ public sealed class ServerMapPayload : IServerMapPayload
         // the server, and they should find it waiting for them.
         //
         ServerMapKey.Current(_configDirectory);
+
+        _clients = new ClientRegistry(_configDirectory);
+
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => _clients.Flush();
     }
 
     public string RoutePrefix => "/tcfservermap";
@@ -64,6 +79,9 @@ public sealed class ServerMapPayload : IServerMapPayload
         {
             "/hello" => Hello(),
             "/list" => List(),
+            "/report" => Post(request, Report),
+            "/withdraw" => Post(request, Withdraw),
+            "/clients" => Clients(request),
             "/echo" => Echo(request),
             _ => NotFound(route),
         });
@@ -88,9 +106,10 @@ public sealed class ServerMapPayload : IServerMapPayload
             listRevision = published?.Revision,
             listName = published?.Name,
             listEntryCount = published?.EntryCount,
+            reportIntervalSeconds = ClientRegistry.IntervalSeconds,
             capabilities = published is not null
-                ? new[] { "hello", "list", "echo" }
-                : new[] { "hello", "echo" },
+                ? new[] { "hello", "list", "map", "echo" }
+                : new[] { "hello", "map", "echo" },
         };
 
         return new PayloadResponse(200, "application/json", JsonSerializer.Serialize(body, Json));
@@ -170,6 +189,104 @@ public sealed class ServerMapPayload : IServerMapPayload
         return new PayloadResponse(200, "application/json", JsonSerializer.Serialize(report, Json));
     }
 
+    private static PayloadResponse Post(PayloadRequest request, Func<PayloadRequest, PayloadResponse> handler) =>
+        string.Equals(request.Method, "POST", StringComparison.OrdinalIgnoreCase)
+            ? handler(request)
+            : Error(405, "This route takes a POST.");
+
+    private PayloadResponse Report(PayloadRequest request)
+    {
+        if (request.Body.Length > MaxReportBytes) return Error(413, "The report is too large.");
+
+        ClientReport? report;
+        try
+        {
+            report = JsonSerializer.Deserialize<ClientReport>(request.Body, ClientRegistry.Json);
+        }
+        catch (JsonException)
+        {
+            return Error(400, "The report is not valid JSON.");
+        }
+
+        if (report is null) return Error(400, "The report is empty.");
+        if (report.Protocol != Protocol) return Error(409, $"This server speaks protocol {Protocol}.");
+
+        var outcome = _clients.Report(report);
+        if (!outcome.Accepted) return Error(400, outcome.Error ?? "The report was refused.");
+
+        var body = new
+        {
+            protocol = Protocol,
+            intervalSeconds = ClientRegistry.IntervalSeconds,
+            resend = outcome.Resend,
+        };
+
+        return new PayloadResponse(200, "application/json", JsonSerializer.Serialize(body, Json));
+    }
+
+    private PayloadResponse Withdraw(PayloadRequest request)
+    {
+        string? clientId = null;
+        try
+        {
+            using var document = JsonDocument.Parse(request.Body);
+            foreach (var property in document.RootElement.EnumerateObject())
+            {
+                if (property.NameEquals("clientId") && property.Value.ValueKind == JsonValueKind.String)
+                    clientId = property.Value.GetString();
+            }
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+        {
+            return Error(400, "The request is not valid JSON.");
+        }
+
+        var body = new { protocol = Protocol, removed = _clients.Withdraw(clientId) };
+
+        return new PayloadResponse(200, "application/json", JsonSerializer.Serialize(body, Json));
+    }
+
+    //
+    // Client ids are never sent back out. Anyone holding the key could otherwise read everybody's
+    // id and withdraw them; instead a machine names itself in a header and its own row comes back
+    // marked isYou.
+    //
+    private PayloadResponse Clients(PayloadRequest request)
+    {
+        var you = Header(request, ClientHeaderName);
+        var now = DateTimeOffset.UtcNow;
+
+        var clients = _clients.Snapshot().Select(c => new
+        {
+            isYou = you is not null && string.Equals(you, c.ClientId, StringComparison.OrdinalIgnoreCase),
+            displayName = c.DisplayName,
+            hosts = c.Hosts,
+            plays = c.Plays,
+            headless = c.Headless,
+            gameRunning = c.GameRunning,
+            sptVersion = c.SptVersion,
+            appVersion = c.AppVersion,
+            firstSeen = c.FirstSeen,
+            lastSeen = c.LastSeen,
+            secondsSinceSeen = (long)Math.Max(0, (now - c.LastSeen).TotalSeconds),
+            inventoryReportedAt = c.InventoryReportedAt,
+            mods = c.Mods,
+        });
+
+        var body = new
+        {
+            protocol = Protocol,
+            serverTime = now,
+            intervalSeconds = ClientRegistry.IntervalSeconds,
+            clients,
+        };
+
+        return new PayloadResponse(200, "application/json", JsonSerializer.Serialize(body, Json));
+    }
+
+    private static PayloadResponse Error(int status, string message) =>
+        new(status, "application/json", JsonSerializer.Serialize(new { protocol = Protocol, error = message }, Json));
+
     private bool Authorized(PayloadRequest request) =>
         ServerMapKey.Verify(ServerMapKey.Current(_configDirectory), Header(request, ServerMapKey.HeaderName));
 
@@ -198,7 +315,7 @@ public sealed class ServerMapPayload : IServerMapPayload
         {
             protocol = Protocol,
             error = $"No route '{route}'.",
-            routes = new[] { "/hello", "/list", "/echo" },
+            routes = new[] { "/hello", "/list", "/report", "/withdraw", "/clients", "/echo" },
         };
 
         return new PayloadResponse(404, "application/json", JsonSerializer.Serialize(body, Json));

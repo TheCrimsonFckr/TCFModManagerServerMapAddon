@@ -13,11 +13,18 @@ is invisible to this one.
 
 ## Three routes
 
-| route | auth | what it is |
-|---|---|---|
-| `GET /tcfservermap/hello` | none | The handshake. Protocol, mod version, server name, whether a key is required, and the published list's name, revision and entry count. |
-| `GET /tcfservermap/list` | key | The published `.tcfmodlist`, served verbatim. 404 when nothing is published. |
-| `POST /tcfservermap/echo` | key | Diagnostic: reports the request body exactly as it arrived. |
+**`GET /tcfservermap/hello`** — no key
+
+The handshake. Reports the protocol version, the mod version, the server name, whether a key is
+required, and the published list's name, revision and entry count.
+
+**`GET /tcfservermap/list`** — key required
+
+The published `.tcfmodlist`, served verbatim. Returns 404 when nothing is published.
+
+**`POST /tcfservermap/echo`** — key required
+
+Diagnostic. Reports the request body exactly as it arrived.
 
 `/hello` is unauthenticated on purpose — it is asked before anyone has been given a key, it discloses
 nothing a port scan would not, and gating it would leave a client unable to tell "wrong address" from
