@@ -1,0 +1,139 @@
+TCFMM Server Map {VERSION}
+======================
+
+The server half of TCFModManager's Server map feature. It publishes the list of mods a
+server expects its players to be running, so the app can warn someone their install is
+behind before they launch, and it shows which machines are on the server and whether
+each one has what the list asks for. It serves a list, never mod files - there is no
+file route.
+
+This zip covers BOTH SPT lines. The payload is one build shared by both; only the stub
+differs, so there are two stub folders and you install exactly one of them.
+
+
+>> INSTALL ONE STUB, NOT BOTH <<
+
+  spt-4.0.13\    for SPT 4.0.x servers
+  spt-4.1.x\     for SPT 4.1.x servers
+
+Both stubs use the same mod id (com.thecrimsonfuckr.servermap) and the same folder and
+assembly names, because only one is ever meant to be present. Copying both into user\mods
+puts two mods with the same id in front of SPT's mod loader, which is not a situation it
+is meant to handle. Pick the one matching your server and copy only that.
+
+If you do pick wrong, SPT's own version gate refuses to load it and says so - each stub
+declares its range (>=4.0.0 <4.1.0 and >=4.1.0 <4.2.0). That is a clean failure, not a
+broken server.
+
+
+INSTALLING
+----------
+
+Two folders, to two different places. <SPT root> is the folder holding TCFModManager\;
+<server folder> is the one holding SPT.Server.exe (SPT\ on 4.0, SPT_Runtime\ on 4.1).
+
+  <your line>\TCFMM.ServerMap\  ->  <server folder>\user\mods\TCFMM.ServerMap\
+  ServerMap\                    ->  <SPT root>\TCFModManager\ServerMap\
+
+So on a 4.1 server you should end up with:
+
+  <SPT root>\SPT_Runtime\user\mods\TCFMM.ServerMap\TCFMM.ServerMap.Stub.dll
+  <SPT root>\SPT_Runtime\user\mods\TCFMM.ServerMap\TCFMM.ServerMap.Shared.dll
+  <SPT root>\SPT_Runtime\user\mods\TCFMM.ServerMap\TCFMM.ServerMap.Stub.deps.json
+  <SPT root>\TCFModManager\ServerMap\payload\TCFMM.ServerMap.Payload.dll
+
+Note there is no spt-4.1.x\ or spt-4.0.13\ folder in the result - that level exists only
+inside this zip, to keep the two stubs apart. You copy what is inside it.
+
+The mod in user\mods\ is a stub that holds no logic: it finds the payload and forwards to
+it. The payload sits outside the folders SPT insists on. It is also the same net9.0 build
+whichever line you are on - it touches no SPT type and no ASP.NET type, which is exactly
+why one payload serves both.
+
+STOP THE SERVER FIRST. The payload DLL is locked while the server is running, and the
+copy will silently fail if you overwrite it live.
+
+Upgrading: replace both folders. Your key, your published list and the list of machines
+that report to you live in <SPT root>\TCFModManager\Data\ServerMap\, which is not part of
+this zip and is never replaced - leave it where it is.
+
+Removing: delete <SPT root>\TCFModManager\ServerMap\payload\. The stub keeps loading, logs
+one line saying it found no payload, and the server starts normally. Delete
+user\mods\TCFMM.ServerMap\ as well to remove it entirely.
+
+
+CHECKING IT LOADED
+------------------
+
+Start the server and look in its log for:
+
+  [TCFMM ServerMap] Ready - serving /tcfservermap from <path>
+
+Then, from another machine:
+
+  curl -k https://<server-ip>:6969/tcfservermap/hello
+
+-k is required: SPT serves a self-signed certificate for localhost, so both the chain and
+the hostname fail validation. That is expected - TCFModManager handles it with
+trust-on-first-use certificate pinning.
+
+For that to reach you at all, SPT_Data\configs\http.json must not be bound to loopback:
+set ip to 0.0.0.0, backendIp to the machine's LAN address, and allow TCP 6969 inbound.
+
+
+PUBLISHING A LIST
+-----------------
+
+Curate the list in TCFModManager on the server machine and press Publish, or export it
+and drop the .tcfmodlist into <SPT root>\TCFModManager\Data\ServerMap\ yourself.
+
+published.tcfmodlist always wins. Failing that, a folder holding exactly one .tcfmodlist
+serves that one. Several files and no preferred name serves nothing - ambiguous beats a
+guess. The file is re-read whenever its size or timestamp moves, so a new export takes
+effect without restarting the server.
+
+
+THE KEY
+-------
+
+Generated on first start into Data\ServerMap\servermap-key.txt - 24 characters in six
+groups of four. Every route except /hello needs it in the X-ServerMap-Key header, so it
+is the thing you send out along with your address. /hello is unauthenticated on purpose:
+it is asked before anyone has a key, and it discloses nothing a port scan would not.
+
+
+THE MAP
+-------
+
+A machine running TCFModManager asks its user once whether to report to your server.
+If they agree, it reports once a minute while the app runs: its name, its roles (server,
+player, headless), whether the game is running, and its installed mods. Everyone holding
+the key can see that on the Server map page. The list is kept in
+Data\ServerMap\clients.json; a machine not heard from for 30 days is forgotten, and one
+that switches reporting off is removed straight away.
+
+
+ROUTES
+------
+
+  GET  /tcfservermap/hello     no key   handshake: protocol, mod version, server name,
+                                        whether a key is required, the published list's
+                                        name, revision and entry count, and capabilities
+  GET  /tcfservermap/list      key      the published .tcfmodlist, verbatim; 404 if none
+  POST /tcfservermap/report    key      a machine's heartbeat, and its mods when they change
+  POST /tcfservermap/withdraw  key      a machine stops reporting and leaves the map
+  GET  /tcfservermap/clients   key      the map: every machine that reports here
+  POST /tcfservermap/echo      key      diagnostic: echoes the request body as it arrived
+
+
+REQUIRES TCFMODMANAGER
+----------------------
+
+This is an addon. A machine not running TCFModManager is invisible to it, and the mod on
+its own changes nothing about how your server behaves.
+
+  https://github.com/TheCrimsonFckr/TCFModManagerServerMapAddon
+  https://github.com/TheCrimsonFckr/TCFModManager
+
+
+com.thecrimsonfuckr.servermap - MIT
