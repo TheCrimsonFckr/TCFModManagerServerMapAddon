@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.Loader;
 
 namespace TCFModManager.ServerMap.Contract;
 
@@ -56,12 +57,27 @@ public static class PayloadLoader
         try
         {
             //
-            // LoadFrom rather than a private AssemblyLoadContext: the payload references this stub
-            // for IServerMapPayload, and it has to resolve to the instance SPT already loaded. An
-            // isolated context would load a second copy of the stub, and the cast below would fail
-            // with the famously unhelpful "cannot cast X to X".
+            // Into the context this contract was loaded into, never a private one and never simply
+            // Default. The payload references this assembly for IServerMapPayload and has to bind
+            // to the instance SPT already loaded: an isolated context would load a second copy and
+            // the cast below would fail with "cannot cast X to X".
             //
-            var assembly = Assembly.LoadFrom(assemblyPath);
+            // Not Assembly.LoadFrom either - that always loads into Default. SPT loads mods into
+            // whatever context its own ModLoader runs in, and when any installed mod has a
+            // prepatcher the whole server is re-hosted in a separate "SPT.PrepatchHost" context.
+            // Shared.dll then lives only there, and a payload in Default cannot find it at all
+            // (FileNotFoundException for TCFMM.ServerMap.Shared). Without a prepatcher both are
+            // Default and this is the same as before.
+            //
+            var context = AssemblyLoadContext.GetLoadContext(typeof(IServerMapPayload).Assembly)
+                ?? AssemblyLoadContext.Default;
+
+            // LoadFromAssemblyPath throws when that context already holds an assembly of the same
+            // name, where LoadFrom quietly returned it - so look first.
+            var name = AssemblyName.GetAssemblyName(assemblyPath).Name;
+
+            var assembly = context.Assemblies.FirstOrDefault(a => a.GetName().Name == name)
+                ?? context.LoadFromAssemblyPath(Path.GetFullPath(assemblyPath));
 
             var type = assembly.GetTypes().FirstOrDefault(t =>
                 typeof(IServerMapPayload).IsAssignableFrom(t) && t is { IsAbstract: false, IsInterface: false });

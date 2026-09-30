@@ -1,5 +1,5 @@
-TCFMM Server Map {VERSION}
-======================
+TCFMM Server Map {VERSION} for SPT {LINE}
+=========================================
 
 The server half of TCFModManager's Server map feature. It publishes the list of mods a
 server expects its players to be running, so the app can warn someone their install is
@@ -7,55 +7,37 @@ behind before they launch, and it shows which machines are on the server and whe
 each one has what the list asks for. It serves a list, never mod files - there is no
 file route.
 
-This zip covers BOTH SPT lines. The payload is one build shared by both; only the stub
-differs, so there are two stub folders and you install exactly one of them.
-
-
->> INSTALL ONE STUB, NOT BOTH <<
-
-  spt-4.0.13\    for SPT 4.0.x servers
-  spt-4.1.x\     for SPT 4.1.x servers
-
-Both stubs use the same mod id (com.thecrimsonfuckr.servermap) and the same folder and
-assembly names, because only one is ever meant to be present. Copying both into user\mods
-puts two mods with the same id in front of SPT's mod loader, which is not a situation it
-is meant to handle. Pick the one matching your server and copy only that.
-
-If you do pick wrong, SPT's own version gate refuses to load it and says so - each stub
-declares its range (>=4.0.0 <4.1.0 and >=4.1.0 <4.2.0). That is a clean failure, not a
-broken server.
+This zip is for SPT {LINE} servers. There is a separate zip for the other SPT line; the
+payload inside is the same build, only the stub differs. Use the zip that matches your
+server - if you pick wrong, SPT's own version gate refuses to load the stub and says so
+(each stub declares its range: >=4.0.0 <4.1.0 and >=4.1.0 <4.2.0). That is a clean
+failure, not a broken server.
 
 
 INSTALLING
 ----------
 
-Two folders, to two different places. <SPT root> is the folder holding TCFModManager\;
-<server folder> is the one holding SPT.Server.exe (SPT\ on 4.0, SPT_Runtime\ on 4.1).
+STOP THE SERVER FIRST, then extract this zip into your SPT root - the folder that holds
+{SERVER_FOLDER}\ and TCFModManager\. Everything lands where it belongs:
 
-  <your line>\TCFMM.ServerMap\  ->  <server folder>\user\mods\TCFMM.ServerMap\
-  ServerMap\                    ->  <SPT root>\TCFModManager\ServerMap\
-
-So on a 4.1 server you should end up with:
-
-  <SPT root>\SPT_Runtime\user\mods\TCFMM.ServerMap\TCFMM.ServerMap.Stub.dll
-  <SPT root>\SPT_Runtime\user\mods\TCFMM.ServerMap\TCFMM.ServerMap.Shared.dll
-  <SPT root>\SPT_Runtime\user\mods\TCFMM.ServerMap\TCFMM.ServerMap.Stub.deps.json
+  <SPT root>\{SERVER_FOLDER}\user\mods\TCFMM.ServerMap\TCFMM.ServerMap.Stub.dll
+  <SPT root>\{SERVER_FOLDER}\user\mods\TCFMM.ServerMap\TCFMM.ServerMap.Shared.dll
+  <SPT root>\{SERVER_FOLDER}\user\mods\TCFMM.ServerMap\TCFMM.ServerMap.Stub.deps.json
   <SPT root>\TCFModManager\ServerMap\payload\TCFMM.ServerMap.Payload.dll
-
-Note there is no spt-4.1.x\ or spt-4.0.13\ folder in the result - that level exists only
-inside this zip, to keep the two stubs apart. You copy what is inside it.
+  <SPT root>\TCFModManager\ServerMap\INSTALL.txt    (this file)
 
 The mod in user\mods\ is a stub that holds no logic: it finds the payload and forwards to
 it. The payload sits outside the folders SPT insists on. It is also the same net9.0 build
 whichever line you are on - it touches no SPT type and no ASP.NET type, which is exactly
 why one payload serves both.
 
-STOP THE SERVER FIRST. The payload DLL is locked while the server is running, and the
-copy will silently fail if you overwrite it live.
+The payload DLL is locked while the server is running, and the copy will silently fail if
+you overwrite it live - hence stopping the server first.
 
-Upgrading: replace both folders. Your key, your published list and the list of machines
-that report to you live in <SPT root>\TCFModManager\Data\ServerMap\, which is not part of
-this zip and is never replaced - leave it where it is.
+Upgrading: stop the server and extract the new zip the same way, over the old files. Your
+key, your published list and the list of machines that report to you live in
+<SPT root>\TCFModManager\Data\ServerMap\, which is not part of this zip and is never
+replaced - leave it where it is.
 
 Removing: delete <SPT root>\TCFModManager\ServerMap\payload\. The stub keeps loading, logs
 one line saying it found no payload, and the server starts normally. Delete

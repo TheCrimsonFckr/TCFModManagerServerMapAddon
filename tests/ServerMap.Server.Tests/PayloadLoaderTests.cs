@@ -1,3 +1,4 @@
+using System.Runtime.Loader;
 using TCFModManager.ServerMap.Contract;
 
 namespace TCFModManager.ServerMap.Tests;
@@ -73,5 +74,41 @@ public class PayloadLoaderTests
 
         Assert.False(result.Loaded);
         Assert.NotNull(result.Error);
+    }
+
+    //
+    // When any installed mod has a prepatcher, SPT re-hosts itself in its own AssemblyLoadContext
+    // ("SPT.PrepatchHost") and loads every mod - Shared.dll included - into that, not Default. The
+    // payload has to land in the same context or it cannot see Shared at all. This stands in for
+    // that context: Shared is loaded only here, and the loader is called through this copy of it.
+    //
+    [Fact]
+    public void The_payload_loads_into_the_context_the_contract_is_in_not_Default()
+    {
+        using var root = new TempDirectory();
+        var stub = StubFolder(root);
+        var payload = PayloadFolder(root);
+
+        var sharedPath = Path.Combine(stub, Path.GetFileName(typeof(IServerMapPayload).Assembly.Location));
+        File.Copy(typeof(IServerMapPayload).Assembly.Location, sharedPath);
+        File.Copy(typeof(ServerMapPayload).Assembly.Location, Path.Combine(payload, PayloadLoader.PayloadAssemblyName));
+
+        var modContext = new AssemblyLoadContext("TCFMM.Tests.PrepatchHost", isCollectible: true);
+        try
+        {
+            var shared = modContext.LoadFromAssemblyPath(sharedPath);
+            var loader = shared.GetType(typeof(PayloadLoader).FullName!, throwOnError: true)!;
+            var result = loader.GetMethod(nameof(PayloadLoader.Load))!.Invoke(null, [stub])!;
+
+            var error = result.GetType().GetProperty(nameof(PayloadLoadResult.Error))!.GetValue(result);
+            var loaded = result.GetType().GetProperty(nameof(PayloadLoadResult.Payload))!.GetValue(result);
+
+            Assert.True(loaded is not null, error?.ToString());
+            Assert.Same(modContext, AssemblyLoadContext.GetLoadContext(loaded!.GetType().Assembly));
+        }
+        finally
+        {
+            modContext.Unload();
+        }
     }
 }

@@ -89,26 +89,27 @@ type-identity conflict against the host's own copies.
 
 ## Deploying
 
-Two folders, and the split is the point:
+Each release is one zip per SPT line, laid out exactly as it installs - extract it into the SPT
+root. `build\package-release.ps1` builds both (and `-Deploy` copies onto local servers):
 
 ```
-<SPT root>\user\mods\TCFMM.ServerMap\        <- the matching stub's bin\Release\TCFMM.ServerMap\
-<SPT root>\TCFModManager\ServerMap\payload\  <- ServerMap.Server\bin\Release\payload\
-<SPT root>\TCFModManager\ServerMap\config\   <- the operator's list, and the generated key
+<SPT root>\SPT_Runtime\user\mods\TCFMM.ServerMap\  <- the 4.1 stub   (SPT\user\mods\ for 4.0.13)
+<SPT root>\TCFModManager\ServerMap\payload\        <- the payload, the same build for both lines
+<SPT root>\TCFModManager\Data\ServerMap\           <- the key, the published list, clients.json
 ```
 
 The stub finds the payload by walking up from its own folder looking for
-`TCFModManager\ServerMap\payload`, so it does not care which SPT layout it is in. `config\` sits
-beside `payload\` rather than inside it because a payload folder is something an update replaces
-wholesale, and the operator's list must not be collateral.
+`TCFModManager\ServerMap\payload`, so it does not care which SPT layout it is in. The operator's
+files live under `Data\` rather than beside `payload\` because an update replaces the payload, and
+the key and the list must not be collateral.
 
 **The payload DLL is locked while the server is running.** Stop the server before replacing it, or
 the copy silently fails and you spend the next hour debugging the previous build.
 
 ## Publishing a list
 
-The operator curates the list in TCFModManager, exports it, and drops the `.tcfmodlist` into
-`config\`. `published.tcfmodlist` always wins; failing that, a folder holding exactly one
+The operator curates the list in TCFModManager, exports it (or presses Publish), and the `.tcfmodlist` lands in
+`TCFModManager\Data\ServerMap\`. `published.tcfmodlist` always wins; failing that, a folder holding exactly one
 `.tcfmodlist` serves it. Several files and no preferred name is genuinely ambiguous, so nothing is
 served rather than a guess.
 

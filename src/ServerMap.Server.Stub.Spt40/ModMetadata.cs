@@ -21,7 +21,7 @@ public sealed record ModMetadata : AbstractModMetadata
     public override List<string>? Contributors { get; init; }
 
     // SemanticVersioning insists on exactly three parts.
-    public override Version Version { get; init; } = new("0.2.0");
+    public override Version Version { get; init; } = new("0.2.1");
 
     //
     // The 4.0 line only. The range is what stops this build being loaded by a 4.1 server, where its

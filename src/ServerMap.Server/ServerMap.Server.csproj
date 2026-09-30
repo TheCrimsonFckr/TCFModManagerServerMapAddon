@@ -16,7 +16,7 @@
     <LangVersion>latest</LangVersion>
     <RootNamespace>TCFModManager.ServerMap</RootNamespace>
     <AssemblyName>TCFMM.ServerMap.Payload</AssemblyName>
-    <Version>0.2.0</Version>
+    <Version>0.2.1</Version>
     <OutputPath>bin\$(Configuration)\payload\</OutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
   </PropertyGroup>

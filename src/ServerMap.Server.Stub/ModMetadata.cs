@@ -19,7 +19,7 @@ public sealed record ModMetadata : IModMetadata
     public List<string>? Contributors { get; init; }
 
     // SemanticVersioning insists on exactly three parts.
-    public Version Version { get; init; } = new("0.2.0");
+    public Version Version { get; init; } = new("0.2.1");
 
     // Deliberately the whole 4.1 line while this is a spike, not a released range.
     public Range SptVersion { get; init; } = new(">=4.1.0 <4.2.0");
