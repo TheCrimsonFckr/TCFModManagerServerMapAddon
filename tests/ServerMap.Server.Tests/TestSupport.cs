@@ -60,10 +60,10 @@ public sealed class PayloadDriver : IDisposable
 
     private readonly TempDirectory _directory = new();
 
-    public PayloadDriver(DateTimeOffset? start = null)
+    public PayloadDriver(DateTimeOffset? start = null, string? profilesDirectory = null)
     {
         Clock = new TestClock(start ?? DateTimeOffset.Parse("2026-09-28T12:00:00Z"));
-        Payload = new ServerMapPayload(_directory.Path, Clock.Func);
+        Payload = new ServerMapPayload(_directory.Path, Clock.Func, profilesDirectory);
         Key = ServerMapKey.Current(_directory.Path);
     }
 
@@ -90,7 +90,11 @@ public sealed class PayloadDriver : IDisposable
         if (address is not null) all[PayloadHeaders.RemoteAddress] = address;
         foreach (var (name, value) in headers) all[name] = value;
 
-        var request = new PayloadRequest(method, "/tcfservermap" + route, null, all,
+        var split = route.IndexOf('?');
+        var path = split < 0 ? route : route[..split];
+        var query = split < 0 ? null : route[split..];
+
+        var request = new PayloadRequest(method, "/tcfservermap" + path, query, all,
             body is null ? [] : Encoding.UTF8.GetBytes(body));
 
         return new Reply(Payload.HandleAsync(request, CancellationToken.None).GetAwaiter().GetResult());

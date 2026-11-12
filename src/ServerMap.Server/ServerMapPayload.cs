@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
+using System.Web;
 using TCFModManager.ServerMap.Contract;
 
 namespace TCFModManager.ServerMap;
@@ -20,6 +21,11 @@ namespace TCFModManager.ServerMap;
 //                                 installed. Sent once a minute. Needs the key.
 //   POST /tcfservermap/withdraw - a machine stops reporting and is taken off the map. Needs the key.
 //   GET /tcfservermap/clients   - the map: every machine that reports here. Needs the key.
+//   GET /tcfservermap/profile?id=<profile id>[&since=<written>]
+//                               - one SPT profile as this server saved it, so a client can show its
+//                                 money and raid record. "since" is the "written" of the copy the
+//                                 client already holds; an unchanged profile comes back as
+//                                 "unchanged": true without the profile. Needs the key.
 //   POST /tcfservermap/echo - diagnostic. Reports the request body exactly as it arrived. Kept from
 //                             the transport spike because "the body arrived mangled" is the one
 //                             class of bug that is impossible to reason about without it. Needs the
@@ -45,17 +51,21 @@ public sealed class ServerMapPayload : IServerMapPayload
 
     private readonly ClientRegistry _clients;
 
+    private readonly string? _profilesDirectory;
+
     // What the stub's loader calls: the config folder is found from where this assembly sits.
     public ServerMapPayload()
-        : this(PublishedModList.ConfigDirectory(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? "."))
+        : this(PublishedModList.ConfigDirectory(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? "."),
+            profilesDirectory: ServerProfiles.FindDirectory())
     {
     }
 
-    // The tests' way in: a config folder of their own, and a clock they can move.
-    internal ServerMapPayload(string configDirectory, Func<DateTimeOffset>? now = null)
+    // The tests' way in: a config folder of their own, a clock they can move, and a profiles folder.
+    internal ServerMapPayload(string configDirectory, Func<DateTimeOffset>? now = null, string? profilesDirectory = null)
     {
         _configDirectory = configDirectory;
         _now = now ?? (() => DateTimeOffset.UtcNow);
+        _profilesDirectory = profilesDirectory;
 
         //
         // Generated when the server starts, not when someone first fails to authenticate.
@@ -101,6 +111,7 @@ public sealed class ServerMapPayload : IServerMapPayload
             "/report" => Post(request, Report),
             "/withdraw" => Post(request, Withdraw),
             "/clients" => Clients(request),
+            "/profile" => Profile(request),
             "/echo" => Echo(request),
             _ => NotFound(route),
         });
@@ -127,8 +138,8 @@ public sealed class ServerMapPayload : IServerMapPayload
             listEntryCount = published?.EntryCount,
             reportIntervalSeconds = ClientRegistry.IntervalSeconds,
             capabilities = published is not null
-                ? new[] { "hello", "list", "map", "echo" }
-                : new[] { "hello", "map", "echo" },
+                ? new[] { "hello", "list", "map", "echo", "profile" }
+                : new[] { "hello", "map", "echo", "profile" },
         };
 
         return new PayloadResponse(200, "application/json", JsonSerializer.Serialize(body, Json));
@@ -303,6 +314,34 @@ public sealed class ServerMapPayload : IServerMapPayload
         return new PayloadResponse(200, "application/json", JsonSerializer.Serialize(body, Json));
     }
 
+    private PayloadResponse Profile(PayloadRequest request)
+    {
+        if (!string.Equals(request.Method, "GET", StringComparison.OrdinalIgnoreCase))
+            return Error(405, "This route takes a GET.");
+
+        var query = HttpUtility.ParseQueryString(request.Query ?? string.Empty);
+        var id = query["id"];
+        if (!ServerProfiles.IsProfileId(id)) return Error(400, "Name a profile: ?id= and its 24-character id.");
+
+        if (_profilesDirectory is null) return Error(500, "This server's profiles folder wasn't found.");
+
+        long? since = long.TryParse(query["since"], out var held) ? held : null;
+        var read = ServerProfiles.Read(_profilesDirectory, id!, since);
+
+        var head = JsonSerializer.Serialize(new
+        {
+            protocol = Protocol,
+            profileId = id,
+            written = read.Written,
+            unchanged = read.State == ProfileReadState.Unchanged,
+            busy = read.State == ProfileReadState.Busy,
+        });
+
+        var profile = read.State == ProfileReadState.Found ? read.Json! : "null";
+
+        return new PayloadResponse(200, "application/json", head[..^1] + ",\"profile\":" + profile + "}");
+    }
+
     private static PayloadResponse Error(int status, string message) =>
         new(status, "application/json", JsonSerializer.Serialize(new { protocol = Protocol, error = message }, Json));
 
@@ -373,7 +412,7 @@ public sealed class ServerMapPayload : IServerMapPayload
         {
             protocol = Protocol,
             error = $"No route '{route}'.",
-            routes = new[] { "/hello", "/list", "/report", "/withdraw", "/clients", "/echo" },
+            routes = new[] { "/hello", "/list", "/report", "/withdraw", "/clients", "/profile", "/echo" },
         };
 
         return new PayloadResponse(404, "application/json", JsonSerializer.Serialize(body, Json));
