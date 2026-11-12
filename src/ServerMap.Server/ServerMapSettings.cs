@@ -21,6 +21,12 @@ public sealed record ServerMapSettings
     // Refuse every request whose address is not on this machine's network (LocalNetwork).
     public bool LanOnly { get; init; }
 
+    // Other machines see only the profiles they made (ProfileOwners) - in /profiles and /profile.
+    public bool HideOtherProfiles { get; init; }
+
+    // Other machines are told not to delete or wipe a profile they didn't make.
+    public bool ProtectOtherProfiles { get; init; }
+
     private static readonly object Gate = new();
     private static string? _cachedPath;
     private static long _cachedLength = -1;

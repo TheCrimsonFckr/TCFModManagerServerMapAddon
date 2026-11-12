@@ -37,7 +37,7 @@ public class PayloadRouteTests : IDisposable
         Assert.True(reply.Json.GetProperty("requiresKey").GetBoolean());
         Assert.False(reply.Json.GetProperty("hasList").GetBoolean());
         Assert.Equal(60, reply.Json.GetProperty("reportIntervalSeconds").GetInt32());
-        Assert.Equal(["hello", "map", "echo", "profile"], reply.Json.GetProperty("capabilities").EnumerateArray().Select(e => e.GetString()));
+        Assert.Equal(["hello", "map", "echo", "profile", "owners"], reply.Json.GetProperty("capabilities").EnumerateArray().Select(e => e.GetString()));
     }
 
     [Fact]
@@ -61,6 +61,8 @@ public class PayloadRouteTests : IDisposable
     [InlineData("POST", "/withdraw")]
     [InlineData("POST", "/echo")]
     [InlineData("GET", "/profile?id=6ac8acae28793133fcefe63e")]
+    [InlineData("GET", "/profiles")]
+    [InlineData("POST", "/claim")]
     [InlineData("GET", "/nothing-here")]
     public void Every_route_but_hello_needs_the_key(string method, string route)
     {

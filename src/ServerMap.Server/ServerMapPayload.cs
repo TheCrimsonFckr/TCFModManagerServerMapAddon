@@ -25,7 +25,15 @@ namespace TCFModManager.ServerMap;
 //                               - one SPT profile as this server saved it, so a client can show its
 //                                 money and raid record. "since" is the "written" of the copy the
 //                                 client already holds; an unchanged profile comes back as
-//                                 "unchanged": true without the profile. Needs the key.
+//                                 "unchanged": true without the profile. With hideOtherProfiles
+//                                 on, a profile the calling machine (X-ServerMap-Client) didn't
+//                                 make comes back as "hidden": true. Needs the key.
+//   GET /tcfservermap/profiles  - the host's profile rules (hideOtherProfiles, protectOtherProfiles
+//                                 in servermap.json) and the profiles the calling machine made.
+//                                 The server machine itself is under no rules. Needs the key.
+//   POST /tcfservermap/claim    - {clientId, profileId}: the machine that just made a profile says
+//                                 so. Only a profile made in the last ten minutes that nobody owns
+//                                 can be claimed. See ProfileOwners. Needs the key.
 //   POST /tcfservermap/echo - diagnostic. Reports the request body exactly as it arrived. Kept from
 //                             the transport spike because "the body arrived mangled" is the one
 //                             class of bug that is impossible to reason about without it. Needs the
@@ -53,6 +61,8 @@ public sealed class ServerMapPayload : IServerMapPayload
 
     private readonly string? _profilesDirectory;
 
+    private readonly ProfileOwners _owners;
+
     // What the stub's loader calls: the config folder is found from where this assembly sits.
     public ServerMapPayload()
         : this(PublishedModList.ConfigDirectory(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? "."),
@@ -66,6 +76,7 @@ public sealed class ServerMapPayload : IServerMapPayload
         _configDirectory = configDirectory;
         _now = now ?? (() => DateTimeOffset.UtcNow);
         _profilesDirectory = profilesDirectory;
+        _owners = new ProfileOwners(configDirectory);
 
         //
         // Generated when the server starts, not when someone first fails to authenticate.
@@ -112,6 +123,8 @@ public sealed class ServerMapPayload : IServerMapPayload
             "/withdraw" => Post(request, Withdraw),
             "/clients" => Clients(request),
             "/profile" => Profile(request),
+            "/profiles" => Profiles(request),
+            "/claim" => Post(request, Claim),
             "/echo" => Echo(request),
             _ => NotFound(route),
         });
@@ -138,8 +151,8 @@ public sealed class ServerMapPayload : IServerMapPayload
             listEntryCount = published?.EntryCount,
             reportIntervalSeconds = ClientRegistry.IntervalSeconds,
             capabilities = published is not null
-                ? new[] { "hello", "list", "map", "echo", "profile" }
-                : new[] { "hello", "map", "echo", "profile" },
+                ? new[] { "hello", "list", "map", "echo", "profile", "owners" }
+                : new[] { "hello", "map", "echo", "profile", "owners" },
         };
 
         return new PayloadResponse(200, "application/json", JsonSerializer.Serialize(body, Json));
@@ -325,6 +338,12 @@ public sealed class ServerMapPayload : IServerMapPayload
 
         if (_profilesDirectory is null) return Error(500, "This server's profiles folder wasn't found.");
 
+        if (Rules(request).HideOtherProfiles && !_owners.IsOwner(id!, Header(request, ClientHeaderName)))
+        {
+            var hidden = new { protocol = Protocol, profileId = id, hidden = true, profile = (object?)null };
+            return new PayloadResponse(200, "application/json", JsonSerializer.Serialize(hidden, Json));
+        }
+
         long? since = long.TryParse(query["since"], out var held) ? held : null;
         var read = ServerProfiles.Read(_profilesDirectory, id!, since);
 
@@ -341,6 +360,72 @@ public sealed class ServerMapPayload : IServerMapPayload
 
         return new PayloadResponse(200, "application/json", head[..^1] + ",\"profile\":" + profile + "}");
     }
+
+    private PayloadResponse Profiles(PayloadRequest request)
+    {
+        if (!string.Equals(request.Method, "GET", StringComparison.OrdinalIgnoreCase))
+            return Error(405, "This route takes a GET.");
+
+        var rules = Rules(request);
+        var body = new
+        {
+            protocol = Protocol,
+            hideOtherProfiles = rules.HideOtherProfiles,
+            protectOtherProfiles = rules.ProtectOtherProfiles,
+            owned = _owners.OwnedBy(Header(request, ClientHeaderName)),
+        };
+
+        return new PayloadResponse(200, "application/json", JsonSerializer.Serialize(body, Json));
+    }
+
+    private PayloadResponse Claim(PayloadRequest request)
+    {
+        string? clientId = null, profileId = null;
+        try
+        {
+            using var document = JsonDocument.Parse(request.Body);
+            foreach (var property in document.RootElement.EnumerateObject())
+            {
+                if (property.Value.ValueKind != JsonValueKind.String) continue;
+                if (property.NameEquals("clientId")) clientId = property.Value.GetString();
+                else if (property.NameEquals("profileId")) profileId = property.Value.GetString();
+            }
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+        {
+            return Error(400, "The request is not valid JSON.");
+        }
+
+        if (!ClientReport.IsClientId(clientId)) return Error(400, "clientId must be a GUID.");
+        if (!ServerProfiles.IsProfileId(profileId)) return Error(400, "profileId must be a profile id.");
+        if (_profilesDirectory is null) return Error(500, "This server's profiles folder wasn't found.");
+
+        var outcome = _owners.Claim(profileId!, clientId!, ServerProfiles.CreatedUtc(_profilesDirectory, profileId!), _now());
+
+        var body = new
+        {
+            protocol = Protocol,
+            claimed = outcome == ClaimOutcome.Claimed,
+            reason = outcome switch
+            {
+                ClaimOutcome.Claimed => null,
+                ClaimOutcome.OwnedByAnother => "ownedByAnother",
+                ClaimOutcome.NoSuchProfile => "noSuchProfile",
+                ClaimOutcome.TooOld => "tooOld",
+                _ => "notSaved",
+            },
+        };
+
+        return new PayloadResponse(200, "application/json", JsonSerializer.Serialize(body, Json));
+    }
+
+    // The host's profile rules as they apply to this caller: none for the server machine itself.
+    private ServerMapSettings Rules(PayloadRequest request) =>
+        IsServerMachine(request) ? ServerMapSettings.Defaults : ServerMapSettings.Current(_configDirectory);
+
+    private static bool IsServerMachine(PayloadRequest request) =>
+        System.Net.IPAddress.TryParse(Header(request, PayloadHeaders.RemoteAddress), out var address)
+        && System.Net.IPAddress.IsLoopback(address.IsIPv4MappedToIPv6 ? address.MapToIPv4() : address);
 
     private static PayloadResponse Error(int status, string message) =>
         new(status, "application/json", JsonSerializer.Serialize(new { protocol = Protocol, error = message }, Json));
@@ -412,7 +497,7 @@ public sealed class ServerMapPayload : IServerMapPayload
         {
             protocol = Protocol,
             error = $"No route '{route}'.",
-            routes = new[] { "/hello", "/list", "/report", "/withdraw", "/clients", "/profile", "/echo" },
+            routes = new[] { "/hello", "/list", "/report", "/withdraw", "/clients", "/profile", "/profiles", "/claim", "/echo" },
         };
 
         return new PayloadResponse(404, "application/json", JsonSerializer.Serialize(body, Json));

@@ -26,6 +26,20 @@ public static partial class ServerProfiles
     [GeneratedRegex("^[0-9a-fA-F]{24}$")]
     private static partial Regex ProfileId();
 
+    // When the profile's file was made, or null when there is none.
+    public static DateTime? CreatedUtc(string directory, string id)
+    {
+        try
+        {
+            var info = new FileInfo(Path.Combine(directory, id + ".json"));
+            return info.Exists ? info.CreationTimeUtc : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
     public static ProfileRead Read(string directory, string id, long? since)
     {
         var file = Path.Combine(directory, id + ".json");
